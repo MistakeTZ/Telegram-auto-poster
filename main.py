@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from datetime import datetime
 from os import getenv
@@ -10,14 +11,19 @@ from agents.gpt import GPTClient
 from agents.prompt import get_prompt
 from database.article import add_article, get_article_by_num, get_existing_articles
 from database.orm import Link, Session, init_db
+from utils.html_parser import get_images_by_url
 from utils.json_parser import parse_text
 
 session: Session = None
 
 
-async def gpt_request(prompt, model="gpt-4o-mini"):
+async def gpt_request(
+    prompt,
+    model="gpt-4o-mini",
+    system_prompt="You are a helpful assistant.",
+):
     async with GPTClient(api_key=getenv("api_key"), model=model) as client:
-        return await client.send_request(prompt)
+        return await client.send_request(prompt, system_prompt=system_prompt)
 
 
 async def add_themes():
@@ -47,54 +53,82 @@ async def add_themes():
     session.commit()
 
 
+async def choose_article():
+    non_existing_themes = get_existing_articles(session, False, True)
+
+    choose_prompt = get_prompt(
+        "choose",
+        today=datetime.now().strftime("%d %B %Y"),
+        themes=non_existing_themes,
+    )
+
+    response = await gpt_request(choose_prompt)
+
+    return int(response) - 1
+
+
+async def genarete_post(theme):
+    article_text_prompt = get_prompt("write_post", theme=theme)
+    response = await gpt_request(article_text_prompt)
+
+    article_prompt = get_prompt("telegram_formatting", article=response)
+    response = await gpt_request(article_prompt)
+
+    return response
+
+
+async def add_article_links(article):
+    photos_prompt = get_prompt(
+        "get_photo",
+        theme=article.theme,
+    )
+    response = await gpt_request(
+        photos_prompt,
+        "gpt-4o-mini-search-preview",
+    )
+
+    links = parse_text(response)
+
+    for link in links:
+        session.add(Link(article_id=article.id, link=link))
+
+
+async def get_images(theme, links):
+    links = [link.link for link in links]
+    images = []
+
+    for link in links:
+        url_images = await get_images_by_url(link)
+
+        if url_images:
+            image_prompt = get_prompt(
+                "valid_images",
+                theme=theme,
+                images=json.dumps(url_images),
+                max_images=min(8, len(url_images)),
+            )
+
+            response = await gpt_request(image_prompt)
+            images.extend(parse_text(response))
+
+    return images
+
+
 async def main():
     # await add_themes()
+    # article_number = await choose_article()
 
-    # non_existing_themes = get_existing_articles(session, False, True)
+    article_number = 1
 
-    # choose_prompt = get_prompt(
-    #     "choose",
-    #     today=datetime.now().strftime("%d %B %Y"),
-    #     themes=non_existing_themes,
-    # )
+    article = get_article_by_num(session, article_number)
 
-    # response = await gpt_request(choose_prompt)
+    # article.text = await genarete_post(article.theme)
+    # await add_article_links(article)
 
-    # chosen_theme = int(response) - 1
-    chosen_theme = 1
-
-    article = get_article_by_num(session, chosen_theme)
-
-    # photos_prompt = get_prompt(
-    #     "get_photo",
-    #     theme=article.theme,
-    # )
-    # response = await gpt_request(
-    #     photos_prompt,
-    #     "gpt-4o-mini-search-preview",
-    # )
-
-    # links = parse_text(response)
-
-    # for link in links:
-    #     session.add(Link(article_id=article.id, link=link))
     # session.commit()
 
-    # article_text_prompt = get_prompt("write_post", theme=article.theme)
-
-    # response = await gpt_request(article_text_prompt)
-
-    # article_prompt = get_prompt("telegram_formatting", article=response)
-
-    # response = await gpt_request(article_prompt)
-
-    # text = response
-    # article.text = text
-    # session.commit()
-
-    links = [link.link for link in article.links]
+    # images = await get_images(article.theme, article.links)
     text = article.text
-    print(text, links)
 
 
 if __name__ == "__main__":
