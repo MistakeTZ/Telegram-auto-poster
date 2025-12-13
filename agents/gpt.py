@@ -1,4 +1,5 @@
 import base64
+import logging
 from typing import List, Optional
 
 import aiohttp
@@ -30,9 +31,11 @@ class GPTClient:
         self.model = model
         self._owned_session = session is None
         self.session = session or aiohttp.ClientSession()
+        logging.info("GPTClient initialized")
 
     async def close(self):
         """Close the aiohttp session if owned by this client."""
+        logging.info("Closing aiohttp session...")
         if self._owned_session:
             await self.session.close()
 
@@ -45,6 +48,7 @@ class GPTClient:
     @staticmethod
     def _encode_image_to_base64(image_path: str) -> str:
         """Encode a local image file to base64 data URL."""
+        logging.info("Encoding image to base64...")
         with open(image_path, "rb") as image_file:
             encoded = base64.b64encode(image_file.read()).decode("utf-8")
         # Guess MIME type from extension (fallback to jpeg)
@@ -77,6 +81,7 @@ class GPTClient:
         """
         # Build the content array for the user message
         content: List[dict] = [{"type": "text", "text": prompt}]
+        logging.info("Sending request with prompt: %s", prompt)
 
         if images:
             for img in images:
@@ -107,5 +112,5 @@ class GPTClient:
             response.raise_for_status()
             data = await response.json()
 
-        # Extract the assistant's reply
+        logging.info("Received response: %s", data)
         return data["choices"][0]["message"]["content"]
