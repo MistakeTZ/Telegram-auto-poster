@@ -31,11 +31,11 @@ class GPTClient:
         self.model = model
         self._owned_session = session is None
         self.session = session or aiohttp.ClientSession()
-        logging.info("GPTClient initialized")
+        logging.debug("GPTClient initialized")
 
     async def close(self):
         """Close the aiohttp session if owned by this client."""
-        logging.info("Closing aiohttp session...")
+        logging.debug("Closing aiohttp session...")
         if self._owned_session:
             await self.session.close()
 
@@ -48,7 +48,7 @@ class GPTClient:
     @staticmethod
     def _encode_image_to_base64(image: bytes, url: str) -> str:
         """Encode a local image bytes to base64 data URL."""
-        logging.info("Encoding image to base64...")
+        logging.debug("Encoding image to base64...")
         encoded = base64.b64encode(image).decode("utf-8")
         # Guess MIME type from extension (fallback to jpeg)
         mime_type = {
@@ -80,7 +80,7 @@ class GPTClient:
         """
         # Build the content array for the user message
         content: List[dict] = [{"type": "text", "text": prompt}]
-        logging.info("Sending request with prompt: %s", prompt)
+        logging.debug("Sending request with prompt: %s", prompt)
 
         if images:
             for img in images:
@@ -106,11 +106,16 @@ class GPTClient:
             "Content-Type": "application/json",
         }
 
-        async with self.session.post(
-            self.API_URL, headers=headers, json=payload
-        ) as response:
-            response.raise_for_status()
-            data = await response.json()
+        try:
+            async with self.session.post(
+                self.API_URL, headers=headers, json=payload
+            ) as response:
+                response.raise_for_status()
+                data = await response.json()
 
-        logging.info("Received response: %s", data)
-        return data["choices"][0]["message"]["content"]
+            logging.info("Received response: %s", data)
+            return data["choices"][0]["message"]["content"]
+
+        except aiohttp.ClientError as e:
+            logging.error("Error sending request: %s", e)
+            return ""

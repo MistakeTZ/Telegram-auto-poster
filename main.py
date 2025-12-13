@@ -11,11 +11,13 @@ from agents.gpt import GPTClient
 from agents.prompt import get_prompt
 from database.article import add_article, get_article_by_num, get_existing_articles
 from database.orm import Link, Session, init_db
+from telegram.poster import post_and_database
 from utils.check_image import download_image, resize_image
-from utils.html_parser import get_images_by_url
+from utils.html_parser import get_image_size, get_images_by_url
 from utils.json_parser import parse_text
 
 session: Session = None
+start_time = datetime.now()
 
 
 async def gpt_request(
@@ -34,7 +36,7 @@ async def gpt_image(
     model="gpt-4o-mini",
 ):
     async with GPTClient(api_key=getenv("api_key"), model=model) as client:
-        return await client.send_request(prompt, [(image, url)])
+        return await client.send_request(prompt, [(image, url)], max_tokens=800)
 
 
 async def add_themes():
@@ -45,7 +47,7 @@ async def add_themes():
 
     response = await gpt_request(actual_themes_prompt)
 
-    events = parse_text(response)
+    events = parse_text(response, ["определи сам"])
     existing = get_existing_articles(session)
 
     new_post_prompt = get_prompt(
@@ -57,7 +59,7 @@ async def add_themes():
 
     response = await gpt_request(new_post_prompt)
 
-    themes = parse_text(response)
+    themes = parse_text(response, [])
 
     for theme in themes:
         add_article(session, theme["topic"], theme["level"], theme["type"])
@@ -80,10 +82,11 @@ async def choose_article():
 
 async def genarete_post(theme):
     article_text_prompt = get_prompt("write_post", theme=theme)
-    response = await gpt_request(article_text_prompt)
+    response = await gpt_request(article_text_prompt, "gpt-4o")
+    response = response.replace("*", "")
 
     article_prompt = get_prompt("telegram_formatting", article=response)
-    response = await gpt_request(article_prompt)
+    response = await gpt_request(article_prompt, "gpt-4o")
 
     return response
 
@@ -98,7 +101,7 @@ async def add_article_links(article):
         "gpt-4o-mini-search-preview",
     )
 
-    links = parse_text(response)
+    links = parse_text(response, [])
 
     for link in links:
         session.add(Link(article_id=article.id, link=link))
@@ -110,15 +113,35 @@ async def find_best_image(text, image_links):
         post=text,
     )
     images = []
+    logging.info(image_links)
 
     for image_link in image_links:
-        downloaded = await download_image(image_link)
-        resized = resize_image(downloaded)
+        try:
+            downloaded = await download_image(image_link)
+            resized = resize_image(downloaded)
 
-        response = await gpt_image(check_image_prompt, resized, image_link)
-        images.append((parse_text(response), image_link))
+            response = await gpt_image(check_image_prompt, resized, image_link)
+            image_percentage = parse_text(response, 0)
+            images.append((image_percentage, image_link))
+        except Exception as e:
+            logging.warning(e)
 
-    return max(images, key=lambda x: x[0])[1]
+    logging.info(images)
+
+    max_value = max(images, key=lambda x: x[0])[0]
+    images_with_max = [image[1] for image in images if image[0] == max_value]
+    logging.info(images_with_max)
+
+    max_size = 0
+    post_image = None
+
+    for image in images_with_max:
+        size = await get_image_size(image)
+        if size >= max_size:
+            max_size = size
+            post_image = image
+
+    return post_image
 
 
 async def get_image(theme, text, links):
@@ -133,11 +156,11 @@ async def get_image(theme, text, links):
                 "valid_images",
                 theme=theme,
                 images=json.dumps(url_images),
-                max_images=min(8, len(url_images)),
+                max_images=min(4, len(url_images)),
             )
 
             response = await gpt_request(image_prompt)
-            image_links.extend(parse_text(response))
+            image_links.extend(parse_text(response, []))
 
     if not image_links:
         return
@@ -148,29 +171,45 @@ async def get_image(theme, text, links):
     return image
 
 
-async def main():
-    # await add_themes()
-    # article_number = await choose_article()
-
-    article_number = 1
+async def send_article():
+    start_time = datetime.now()
+    await add_themes()
+    article_number = await choose_article()
 
     article = get_article_by_num(session, article_number)
 
-    # article.text = await genarete_post(article.theme)
-    # await add_article_links(article)
+    article.text = await genarete_post(article.theme)
+    await add_article_links(article)
 
-    # image = await get_image(article.theme, article.text, article.links)
-    # if image:
-    #     article.image = image
-    # session.commit()
+    image = await get_image(article.theme, article.text, article.links)
+    if image:
+        article.photo = image
+    session.commit()
 
-    text = article.text
-    image = article.image
+    text = article.text + getenv("article_end").replace("\\n", "\n")
+    image = article.photo
+
+    image_bytes = None
+    if image:
+        try:
+            image_bytes = await download_image(image)
+        except Exception as e:
+            logging.warning(e)
+
+    await post_and_database(
+        article,
+        getenv("channel"),
+        getenv("token"),
+        text,
+        image_bytes,
+    )
+    session.commit()
+    logging.info("Article sent in %s", (datetime.now() - start_time).total_seconds())
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, stream=stdout)
+    logging.basicConfig(level=logging.DEBUG, stream=stdout)
     load_dotenv()
     session = init_db()
 
-    asyncio.run(main())
+    asyncio.run(send_article())

@@ -6,9 +6,13 @@ from bs4 import BeautifulSoup
 
 
 async def get_image_size(url):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            return response.content.total_bytes
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                return response.content.total_bytes
+    except Exception as e:
+        logging.warning(e)
+        return 0
 
 
 def extract_image_candidates(soup: BeautifulSoup) -> dict:
@@ -104,7 +108,7 @@ async def get_images_by_url(url: str):
     normal_images = []
     for image in images:
         size = await get_image_size(image["src"])
-        if size >= 1200:
+        if size >= 5000:
             normal_images.append(image)
             normal_images[-1]["size"] = size
             normal_images[-1]["score"] += size // 1000

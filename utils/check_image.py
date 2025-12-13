@@ -3,8 +3,6 @@ from io import BytesIO
 import aiohttp
 from PIL import Image
 
-from agents.gpt import GPTClient
-
 
 async def download_image(url):
     async with aiohttp.ClientSession() as session:
@@ -13,7 +11,7 @@ async def download_image(url):
             return image
 
 
-def resize_image(image: bytes, max_width: int = 200):
+def resize_image(image: bytes, max_width: int = 120):
     with Image.open(BytesIO(image)) as img:
         if img.mode in ("RGBA", "LA", "P"):
             img = img.convert("RGB")
