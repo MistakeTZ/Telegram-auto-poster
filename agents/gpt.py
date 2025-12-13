@@ -46,11 +46,10 @@ class GPTClient:
         await self.close()
 
     @staticmethod
-    def _encode_image_to_base64(image_path: str) -> str:
-        """Encode a local image file to base64 data URL."""
+    def _encode_image_to_base64(image: bytes, url: str) -> str:
+        """Encode a local image bytes to base64 data URL."""
         logging.info("Encoding image to base64...")
-        with open(image_path, "rb") as image_file:
-            encoded = base64.b64encode(image_file.read()).decode("utf-8")
+        encoded = base64.b64encode(image).decode("utf-8")
         # Guess MIME type from extension (fallback to jpeg)
         mime_type = {
             ".png": "image/png",
@@ -58,13 +57,13 @@ class GPTClient:
             ".jpeg": "image/jpeg",
             ".gif": "image/gif",
             ".webp": "image/webp",
-        }.get(image_path.lower()[image_path.rfind(".") :], "image/jpeg")
+        }.get(url[url.rfind(".") :], "image/jpeg")
         return f"data:{mime_type};base64,{encoded}"
 
     async def send_request(
         self,
         prompt: str,
-        images: Optional[List[str]] = None,
+        images: Optional[List[tuple[str, str]]] = None,
         system_prompt: str = "You are a helpful assistant.",
         max_tokens: int = 500,
         temperature: float = 0.7,
@@ -85,7 +84,7 @@ class GPTClient:
 
         if images:
             for img in images:
-                image_url = self._encode_image_to_base64(img)
+                image_url = self._encode_image_to_base64(*img)
                 content.append({"type": "image_url", "image_url": {"url": image_url}})
 
         # Build messages

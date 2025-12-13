@@ -11,6 +11,7 @@ from agents.gpt import GPTClient
 from agents.prompt import get_prompt
 from database.article import add_article, get_article_by_num, get_existing_articles
 from database.orm import Link, Session, init_db
+from utils.check_image import download_image, resize_image
 from utils.html_parser import get_images_by_url
 from utils.json_parser import parse_text
 
@@ -24,6 +25,16 @@ async def gpt_request(
 ):
     async with GPTClient(api_key=getenv("api_key"), model=model) as client:
         return await client.send_request(prompt, system_prompt=system_prompt)
+
+
+async def gpt_image(
+    prompt,
+    image,
+    url,
+    model="gpt-4o-mini",
+):
+    async with GPTClient(api_key=getenv("api_key"), model=model) as client:
+        return await client.send_request(prompt, [(image, url)])
 
 
 async def add_themes():
@@ -93,9 +104,26 @@ async def add_article_links(article):
         session.add(Link(article_id=article.id, link=link))
 
 
-async def get_images(theme, links):
-    links = [link.link for link in links]
+async def find_best_image(text, image_links):
+    check_image_prompt = get_prompt(
+        "check_image",
+        post=text,
+    )
     images = []
+
+    for image_link in image_links:
+        downloaded = await download_image(image_link)
+        resized = resize_image(downloaded)
+
+        response = await gpt_image(check_image_prompt, resized, image_link)
+        images.append((parse_text(response), image_link))
+
+    return max(images, key=lambda x: x[0])[1]
+
+
+async def get_image(theme, text, links):
+    links = [link.link for link in links]
+    image_links = []
 
     for link in links:
         url_images = await get_images_by_url(link)
@@ -109,9 +137,15 @@ async def get_images(theme, links):
             )
 
             response = await gpt_request(image_prompt)
-            images.extend(parse_text(response))
+            image_links.extend(parse_text(response))
 
-    return images
+    if not image_links:
+        return
+
+    image = await find_best_image(text, image_links)
+    logging.info(image)
+
+    return image
 
 
 async def main():
@@ -125,10 +159,13 @@ async def main():
     # article.text = await genarete_post(article.theme)
     # await add_article_links(article)
 
+    # image = await get_image(article.theme, article.text, article.links)
+    # if image:
+    #     article.image = image
     # session.commit()
 
-    # images = await get_images(article.theme, article.links)
     text = article.text
+    image = article.image
 
 
 if __name__ == "__main__":
