@@ -88,7 +88,7 @@ async def genarete_post(theme):
     article_prompt = get_prompt("telegram_formatting", article=response)
     response = await gpt_request(article_prompt, "gpt-4o")
 
-    return response
+    return response.replace("<br>", "\n").replace("<p>", "").replace("</p>", "")
 
 
 async def add_article_links(article):
@@ -258,7 +258,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG, stream=stdout)
+    logging.basicConfig(level=logging.INFO, stream=stdout)
     load_dotenv()
     session = init_db()
 

@@ -1,5 +1,6 @@
 import logging
 import re
+import urllib.parse
 
 import aiohttp
 from bs4 import BeautifulSoup
@@ -104,14 +105,22 @@ async def get_images_by_url(url: str):
     if not html:
         return
     images = extract_image_candidates(html)
-
     normal_images = []
     for image in images:
-        size = await get_image_size(image["src"])
-        if size >= 5000:
-            normal_images.append(image)
-            normal_images[-1]["size"] = size
-            normal_images[-1]["score"] += size // 1000
-
+        src = image["src"]
+        if src.startswith("/_next/image"):
+            continue
+        if src.startswith("/"):
+            src = urllib.parse.urljoin(url, src)
+        try:
+            size = await get_image_size(src)
+            if size >= 5000:
+                normal_image = image.copy()
+                normal_image["src"] = src
+                normal_image["size"] = size
+                normal_image["score"] += size // 1000
+                normal_images.append(normal_image)
+        except Exception as e:
+            logging.debug("Failed to get size for %s: %s", src, e)
     normal_images.sort(key=lambda x: x["score"], reverse=True)
     return normal_images
