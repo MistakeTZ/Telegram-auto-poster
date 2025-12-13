@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from os import getenv
 from sys import stdout
 
@@ -48,7 +48,7 @@ async def add_themes():
     response = await gpt_request(actual_themes_prompt)
 
     events = parse_text(response, ["определи сам"])
-    existing = get_existing_articles(session)
+    existing = get_existing_articles(session, maximum=100)
 
     new_post_prompt = get_prompt(
         "themes",
@@ -75,7 +75,7 @@ async def choose_article():
         themes=non_existing_themes,
     )
 
-    response = await gpt_request(choose_prompt)
+    response = await gpt_request(choose_prompt, "gpt-4o")
 
     return int(response) - 1
 
@@ -98,7 +98,7 @@ async def add_article_links(article):
     )
     response = await gpt_request(
         photos_prompt,
-        "gpt-4o-mini-search-preview",
+        "gpt-4o-search-preview",
     )
 
     links = parse_text(response, [])
@@ -171,7 +171,7 @@ async def get_image(theme, text, links):
     return image
 
 
-async def send_article():
+async def send_article(post_time: datetime):
     start_time = datetime.now()
     await add_themes()
     article_number = await choose_article()
@@ -196,6 +196,10 @@ async def send_article():
         except Exception as e:
             logging.warning(e)
 
+    logging.info("Article ready in %s", (datetime.now() - start_time).total_seconds())
+    if datetime.now() < post_time:
+        await asyncio.sleep((post_time - datetime.now()).total_seconds())
+
     await post_and_database(
         article,
         getenv("channel"),
@@ -204,7 +208,53 @@ async def send_article():
         image_bytes,
     )
     session.commit()
-    logging.info("Article sent in %s", (datetime.now() - start_time).total_seconds())
+    logging.info("Article sent")
+
+
+async def main():
+    send_times = [int(time) for time in getenv("send_times").split(",")]
+    logging.info(send_times)
+
+    while True:
+        now = datetime.now()
+        current_hour = now.hour
+
+        future_hours_today = [h for h in send_times if h > current_hour]
+
+        if future_hours_today:
+            next_hour = future_hours_today[0]
+            next_day_offset = 0
+        else:
+            next_hour = send_times[0]
+            next_day_offset = 1
+
+        target_time = datetime(
+            year=now.year,
+            month=now.month,
+            day=now.day,
+            hour=next_hour,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+
+        target_time += timedelta(days=next_day_offset)
+
+        if target_time <= now:
+            target_time += timedelta(days=1)
+            target_time = target_time.replace(hour=send_times[0])
+
+        wait_seconds = (target_time - timedelta(minutes=5) - now).total_seconds()
+        if wait_seconds < 0:
+            wait_seconds = 0
+
+        logging.info(
+            f"Next send scheduled for {target_time} (in {wait_seconds:.0f} seconds)"
+        )
+
+        await asyncio.sleep(wait_seconds)
+
+        await send_article(target_time)
 
 
 if __name__ == "__main__":
@@ -212,4 +262,4 @@ if __name__ == "__main__":
     load_dotenv()
     session = init_db()
 
-    asyncio.run(send_article())
+    asyncio.run(main())
