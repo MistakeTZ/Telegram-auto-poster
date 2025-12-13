@@ -98,8 +98,9 @@ class GPTClient:
             "model": self.model,
             "messages": messages,
             "max_tokens": max_tokens,
-            "temperature": temperature,
         }
+        if not "search" in self.model:
+            payload["temperature"] = temperature
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",

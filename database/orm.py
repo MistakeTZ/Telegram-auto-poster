@@ -1,8 +1,17 @@
 import logging
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, create_engine, func
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    create_engine,
+    func,
+)
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, relationship, sessionmaker
 
 # Base model
 Base = declarative_base()
@@ -29,6 +38,22 @@ class Article(Base):
     posted_channel = Column(String, nullable=True)
     posted_photo = Column(String, nullable=True)
     posted_time = Column(DateTime(timezone=True), nullable=True)
+
+    links = relationship("Link", back_populates="article")
+
+
+class Link(Base):
+    __tablename__ = "links"
+
+    id = Column(  # noqa VNE003
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+    article_id = Column(ForeignKey("articles.id"), nullable=False)
+    link = Column(String, nullable=False)
+
+    article = relationship("Article", back_populates="links")
 
 
 # Init DB
