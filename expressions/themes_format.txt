@@ -1,0 +1,12 @@
+[
+    {
+        "topic": "Конкретная тема статьи",
+        "type": "instrukcii-i-gaidy",
+        "level": "nachinayushchij"
+    },
+    {
+        "topic": "Конкретная тема статьи",
+        "type": "instrukcii-i-gaidy",
+        "level": "prodvinutyj"
+    }
+]
