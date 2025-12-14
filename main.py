@@ -11,6 +11,7 @@ from agents.gpt import GPTClient
 from agents.prompt import get_prompt
 from database.article import add_article, get_article_by_num, get_existing_articles
 from database.orm import Link, Session, init_db
+from telegram.formatter import format_text
 from telegram.poster import post_and_database
 from utils.check_image import download_image, resize_image
 from utils.html_parser import get_image_size, get_images_by_url
@@ -40,24 +41,25 @@ async def gpt_image(
 
 
 async def add_themes():
-    actual_themes_prompt = get_prompt(
-        "actual_events",
-        today=datetime.now().strftime("%d %B %Y"),
-    )
+    # actual_themes_prompt = get_prompt(
+    #     "actual_events",
+    #     today=datetime.now().strftime("%d %B %Y"),
+    # )
 
-    response = await gpt_request(actual_themes_prompt)
+    # response = await gpt_request(actual_themes_prompt)
 
-    events = parse_text(response, ["определи сам"])
+    # events = parse_text(response, ["определи сам"])
     existing = get_existing_articles(session, maximum=100)
 
     new_post_prompt = get_prompt(
         "themes",
-        actualEvents="\n".join(events),
+        today=datetime.now().strftime("%d %B %Y"),
+        # actualEvents="\n".join(events),
         existingThemes=existing,
         format=get_prompt("themes_format"),
     )
 
-    response = await gpt_request(new_post_prompt)
+    response = await gpt_request(new_post_prompt, "gpt-4o")
 
     themes = parse_text(response, [])
 
@@ -88,7 +90,8 @@ async def genarete_post(theme):
     article_prompt = get_prompt("telegram_formatting", article=response)
     response = await gpt_request(article_prompt, "gpt-4o")
 
-    return response.replace("<br>", "\n").replace("<p>", "").replace("</p>", "")
+    formatted = format_text(response)
+    return formatted
 
 
 async def add_article_links(article):
