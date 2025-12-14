@@ -3,13 +3,17 @@ import json
 import logging
 from datetime import datetime, timedelta
 from os import getenv
-from sys import stdout
+from sys import stdout, argv
 
 from dotenv import load_dotenv
 
 from agents.gpt import GPTClient
 from agents.prompt import get_prompt
-from database.article import add_article, get_article_by_num, get_existing_articles
+from database.article import (
+    add_article,
+    get_article_by_num,
+    get_existing_articles,
+)
 from database.orm import Link, Session, init_db
 from telegram.formatter import format_text
 from telegram.poster import post_and_database
@@ -27,7 +31,10 @@ async def gpt_request(
     system_prompt="You are a helpful assistant.",
 ):
     async with GPTClient(api_key=getenv("api_key"), model=model) as client:
-        return await client.send_request(prompt, system_prompt=system_prompt)
+        return await client.send_request(
+            prompt,
+            system_prompt=system_prompt,
+        )
 
 
 async def gpt_image(
@@ -83,7 +90,9 @@ async def choose_article():
 
 
 async def genarete_post(theme):
-    article_text_prompt = get_prompt("write_post", theme=theme)
+    article_text_prompt = get_prompt(
+        "write_post", theme=theme, today=datetime.now().strftime("%d %B %Y"),
+    )
     response = await gpt_request(article_text_prompt, "gpt-4o")
     response = response.replace("*", "")
 
@@ -215,49 +224,54 @@ async def send_article(post_time: datetime):
 
 
 async def main():
-    send_times = [int(time) for time in getenv("send_times").split(",")]
-    logging.info(send_times)
+    if "send_now" in argv:
+        logging.info("Sending article now")
+        await send_article(datetime.now())
 
-    while True:
-        now = datetime.now()
-        current_hour = now.hour
+    else:
+        send_times = [int(time) for time in getenv("send_times").split(",")]
+        logging.info(send_times)
 
-        future_hours_today = [h for h in send_times if h > current_hour]
+        while True:
+            now = datetime.now()
+            current_hour = now.hour
 
-        if future_hours_today:
-            next_hour = future_hours_today[0]
-            next_day_offset = 0
-        else:
-            next_hour = send_times[0]
-            next_day_offset = 1
+            future_hours_today = [h for h in send_times if h > current_hour]
 
-        target_time = datetime(
-            year=now.year,
-            month=now.month,
-            day=now.day,
-            hour=next_hour,
-            minute=0,
-            second=0,
-            microsecond=0,
-        )
+            if future_hours_today:
+                next_hour = future_hours_today[0]
+                next_day_offset = 0
+            else:
+                next_hour = send_times[0]
+                next_day_offset = 1
 
-        target_time += timedelta(days=next_day_offset)
+            target_time = datetime(
+                year=now.year,
+                month=now.month,
+                day=now.day,
+                hour=next_hour,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
 
-        if target_time <= now:
-            target_time += timedelta(days=1)
-            target_time = target_time.replace(hour=send_times[0])
+            target_time += timedelta(days=next_day_offset)
 
-        wait_seconds = (target_time - timedelta(minutes=5) - now).total_seconds()
-        if wait_seconds < 0:
-            wait_seconds = 0
+            if target_time <= now:
+                target_time += timedelta(days=1)
+                target_time = target_time.replace(hour=send_times[0])
 
-        logging.info(
-            f"Next send scheduled for {target_time} (in {wait_seconds:.0f} seconds)"
-        )
+            wait_seconds = (target_time - timedelta(minutes=5) - now).total_seconds()
+            if wait_seconds < 0:
+                wait_seconds = 0
 
-        await asyncio.sleep(wait_seconds)
+            logging.info(
+                f"Next send scheduled for {target_time} (in {wait_seconds:.0f} seconds)"
+            )
 
-        await send_article(target_time)
+            await asyncio.sleep(wait_seconds)
+
+            await send_article(target_time)
 
 
 if __name__ == "__main__":

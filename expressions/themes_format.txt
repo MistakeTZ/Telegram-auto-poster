@@ -1,12 +1,12 @@
 [
     {
-        "topic": "Конкретная тема статьи",
-        "type": "instrukcii-i-gaidy",
+        "topic": "Анонс cyberpunk 2",
+        "type": "announces",
         "level": "nachinayushchij"
     },
     {
-        "topic": "Конкретная тема статьи",
-        "type": "instrukcii-i-gaidy",
+        "topic": "GTA6 раскритиковали",
+        "type": "sobitiya",
         "level": "prodvinutyj"
     }
 ]
