@@ -1,19 +1,24 @@
 import logging
 import re
 import urllib.parse
+from io import BytesIO
 
 import aiohttp
 from bs4 import BeautifulSoup
+from PIL import Image
 
 
 async def get_image_size(url):
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
-                return response.content.total_bytes
+                if response.status == 200:
+                    image_data = await response.read()
+                    image = Image.open(BytesIO(image_data))
+                    return image.size[0]
     except Exception as e:
-        logging.warning(e)
-        return 0
+        logging.warning(f"Can't load image {url}: {e}")
+    return 0
 
 
 def extract_image_candidates(soup: BeautifulSoup) -> dict:
@@ -105,6 +110,7 @@ async def get_images_by_url(url: str):
     if not html:
         return
     images = extract_image_candidates(html)
+
     normal_images = []
     for image in images:
         src = image["src"]
@@ -114,13 +120,21 @@ async def get_images_by_url(url: str):
             src = urllib.parse.urljoin(url, src)
         try:
             size = await get_image_size(src)
-            if size >= 5000:
+            if size >= 600:
                 normal_image = image.copy()
                 normal_image["src"] = src
                 normal_image["size"] = size
-                normal_image["score"] += size // 1000
+                normal_image["score"] += size // 100
                 normal_images.append(normal_image)
         except Exception as e:
             logging.debug("Failed to get size for %s: %s", src, e)
     normal_images.sort(key=lambda x: x["score"], reverse=True)
     return normal_images
+
+
+if __name__ == "__main__":
+    import asyncio
+    import sys
+
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+    asyncio.run(get_images_by_url("https://1000.menu/cooking/14290-kurica-vino"))

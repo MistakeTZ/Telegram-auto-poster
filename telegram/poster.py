@@ -39,19 +39,18 @@ async def post_to_channel(
     Posts a message (with optional image as photo + caption) to a Telegram channel using the Bot API.
     """
     base_url = f"https://api.telegram.org/bot{token}"
+    photo = None
 
     if image:
-        if len(text) > 1024:
-            caption = None
-        else:
-            caption = text
-
         method = "sendPhoto"
         url = f"{base_url}/{method}"
 
         form = aiohttp.FormData()
         form.add_field("chat_id", str(channel))
-        form.add_field("caption", caption)
+
+        if len(text) <= 1024:
+            form.add_field("caption", text)
+
         form.add_field("parse_mode", "HTML")
         form.add_field(
             "photo",
@@ -62,8 +61,9 @@ async def post_to_channel(
         async with aiohttp.ClientSession() as session:
             async with session.post(url, data=form) as resp:
                 response = await resp.json()
-                if caption:
+                if not text:
                     return response
+                photo = response["result"]["photo"]
 
     method = "sendMessage"
     url = f"{base_url}/{method}"
@@ -77,4 +77,9 @@ async def post_to_channel(
 
     async with aiohttp.ClientSession() as session:
         async with session.get(url, params=params) as resp:
-            return await resp.json()
+            response = await resp.json()
+
+    if photo:
+        response["result"]["photo"] = photo
+
+    return response
