@@ -1,0 +1,6 @@
+{
+    "name": "Борщ",
+    "level": 1,
+    "theme": "launch",
+    "time": 120
+}

@@ -1,0 +1,37 @@
+[
+    {
+        "name": "breakfast",
+        "full_name": "Завтрак",
+        "probability": 30
+    },
+    {
+        "name": "launch",
+        "full_name": "Обед",
+        "probability": 30
+    },
+    {
+        "name": "dinner",
+        "full_name": "Ужин",
+        "probability": 30
+    },
+    {
+        "name": "pp",
+        "full_name": "Здоровая еда",
+        "probability": 40
+    },
+    {
+        "name": "zakuski",
+        "full_name": "Закуски",
+        "probability": 30
+    },
+    {
+        "name": "desserts",
+        "full_name": "Десерты",
+        "probability": 50
+    },
+    {
+        "name": "drinks",
+        "full_name": "Напитки",
+        "probability": 20
+    }
+]

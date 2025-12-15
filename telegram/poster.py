@@ -41,12 +41,17 @@ async def post_to_channel(
     base_url = f"https://api.telegram.org/bot{token}"
 
     if image:
+        if len(text) > 1024:
+            caption = None
+        else:
+            caption = text
+
         method = "sendPhoto"
         url = f"{base_url}/{method}"
 
         form = aiohttp.FormData()
         form.add_field("chat_id", str(channel))
-        form.add_field("caption", text)
+        form.add_field("caption", caption)
         form.add_field("parse_mode", "HTML")
         form.add_field(
             "photo",
@@ -56,18 +61,20 @@ async def post_to_channel(
 
         async with aiohttp.ClientSession() as session:
             async with session.post(url, data=form) as resp:
-                return await resp.json()
-    else:
-        method = "sendMessage"
-        url = f"{base_url}/{method}"
+                response = await resp.json()
+                if caption:
+                    return response
 
-        params = {
-            "chat_id": str(channel),
-            "text": text,
-            "disable_web_page_preview": 1,
-            "parse_mode": "HTML",
-        }
+    method = "sendMessage"
+    url = f"{base_url}/{method}"
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params) as resp:
-                return await resp.json()
+    params = {
+        "chat_id": str(channel),
+        "text": text,
+        "disable_web_page_preview": 1,
+        "parse_mode": "HTML",
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, params=params) as resp:
+            return await resp.json()

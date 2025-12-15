@@ -69,7 +69,7 @@ def format_text(text: str) -> str:
         def get_cleaned(self):
             return "".join(self.result)
 
-    text = text.replace("<br>", "\n")
+    text = text.replace("<br>", "\n").replace("*", "")
     text = text.replace("\n\n\n", "\n\n")
 
     parser = SelectiveStripper()

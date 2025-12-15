@@ -1,20 +1,17 @@
 import asyncio
 import json
 import logging
+import random
 from datetime import datetime, timedelta
 from os import getenv
-from sys import stdout, argv
+from sys import argv, stdout
 
 from dotenv import load_dotenv
 
 from agents.gpt import GPTClient
 from agents.prompt import get_prompt
-from database.article import (
-    add_article,
-    get_article_by_num,
-    get_existing_articles,
-)
-from database.orm import Link, Session, init_db
+from database.article import add_article, get_existing_articles
+from database.orm import Hashtag, Link, Session, Theme, init_db
 from telegram.formatter import format_text
 from telegram.poster import post_and_database
 from utils.check_image import download_image, resize_image
@@ -47,66 +44,76 @@ async def gpt_image(
         return await client.send_request(prompt, [(image, url)], max_tokens=800)
 
 
-async def add_themes():
-    # actual_themes_prompt = get_prompt(
-    #     "actual_events",
-    #     today=datetime.now().strftime("%d %B %Y"),
-    # )
+def choose_theme(boost_name: str, boost_amount: int = 150):
+    themes = session.query(Theme).all()
 
-    # response = await gpt_request(actual_themes_prompt)
+    weights = [theme.probability for theme in themes]
 
-    # events = parse_text(response, ["определи сам"])
-    existing = get_existing_articles(session, maximum=100)
+    for i, theme in enumerate(themes):
+        if theme.name == boost_name:
+            weights[i] += boost_amount
+            break
 
-    new_post_prompt = get_prompt(
-        "themes",
-        today=datetime.now().strftime("%d %B %Y"),
-        # actualEvents="\n".join(events),
-        existingThemes=existing,
-        format=get_prompt("themes_format"),
-    )
-
-    response = await gpt_request(new_post_prompt, "gpt-4o")
-
-    themes = parse_text(response, [])
-
-    for theme in themes:
-        add_article(session, theme["topic"], theme["level"], theme["type"])
-    session.commit()
+    return random.choices(themes, weights=weights, k=1)[0]
 
 
-async def choose_article():
-    non_existing_themes = get_existing_articles(session, False, True)
+async def create_new_article(day_time):
+    theme = choose_theme(day_time)
+    logging.info(f"Chosen theme: {theme.name}")
+
+    existing_themes = get_existing_articles(session, maximum=200)
 
     choose_prompt = get_prompt(
-        "choose",
-        today=datetime.now().strftime("%d %B %Y"),
-        themes=non_existing_themes,
+        "choose_theme",
+        theme=theme.name,
+        existingThemes=existing_themes,
+        format=get_prompt("choose_theme_format"),
     )
 
     response = await gpt_request(choose_prompt, "gpt-4o")
+    article_dict = parse_text(response, {})
 
-    return int(response) - 1
+    if article_dict:
+        article = add_article(
+            session,
+            name=article_dict["name"],
+            level=int(article_dict["level"]),
+            theme=article_dict["theme"],
+            time=int(article_dict["time"]),
+        )
+        return article
+
+    return
 
 
 async def genarete_post(theme):
+    hashtags = session.query(Hashtag).all()
+    hashtag_names = [hashtag.name for hashtag in hashtags]
+
     article_text_prompt = get_prompt(
-        "write_post", theme=theme, today=datetime.now().strftime("%d %B %Y"),
+        "write_post",
+        theme=theme,
+        hashtags="\n".join(hashtag_names),
+        format=get_prompt("post_format"),
     )
     response = await gpt_request(article_text_prompt, "gpt-4o")
-    response = response.replace("*", "")
-
-    article_prompt = get_prompt("telegram_formatting", article=response)
-    response = await gpt_request(article_prompt, "gpt-4o")
 
     formatted = format_text(response)
+
+    for word in formatted.split():
+        if word.startswith("#"):
+            if not word[1:] in hashtag_names:
+                hashtag = Hashtag(name=word[1:])
+                session.add(hashtag)
+    session.commit()
+
     return formatted
 
 
 async def add_article_links(article):
     photos_prompt = get_prompt(
         "get_photo",
-        theme=article.theme,
+        theme=article.name,
     )
     response = await gpt_request(
         photos_prompt,
@@ -119,10 +126,11 @@ async def add_article_links(article):
         session.add(Link(article_id=article.id, link=link))
 
 
-async def find_best_image(text, image_links):
+async def find_best_image(theme, text, image_links):
     check_image_prompt = get_prompt(
         "check_image",
-        post=text,
+        theme=theme,
+        recipe=text,
     )
     images = []
     logging.info(image_links)
@@ -177,23 +185,24 @@ async def get_image(theme, text, links):
     if not image_links:
         return
 
-    image = await find_best_image(text, image_links)
+    image = await find_best_image(theme, text, image_links)
     logging.info(image)
 
     return image
 
 
-async def send_article(post_time: datetime):
+async def send_article(post_time: datetime, day_time="any"):
     start_time = datetime.now()
-    await add_themes()
-    article_number = await choose_article()
 
-    article = get_article_by_num(session, article_number)
+    article = await create_new_article(day_time)
+    if not article:
+        logging.error("Failed to create article")
+        return
 
-    article.text = await genarete_post(article.theme)
+    article.text = await genarete_post(article.name)
     await add_article_links(article)
 
-    image = await get_image(article.theme, article.text, article.links)
+    image = await get_image(article.name, article.text, article.links)
     if image:
         article.photo = image
     session.commit()
@@ -229,7 +238,13 @@ async def main():
         await send_article(datetime.now())
 
     else:
-        send_times = [int(time) for time in getenv("send_times").split(",")]
+        food_times = {}
+        send_times = []
+        for time in ["breakfast", "launch", "dinner"]:
+            times = [int(time) for time in getenv(time).split(",")]
+            food_times[time] = times
+            send_times = send_times + times
+
         logging.info(send_times)
 
         while True:
@@ -244,6 +259,10 @@ async def main():
             else:
                 next_hour = send_times[0]
                 next_day_offset = 1
+
+            for key in food_times:
+                if next_hour in food_times[key]:
+                    break
 
             target_time = datetime(
                 year=now.year,
@@ -269,9 +288,13 @@ async def main():
                 f"Next send scheduled for {target_time} (in {wait_seconds:.0f} seconds)"
             )
 
-            await asyncio.sleep(wait_seconds)
+            if "debug" in argv:
+                logging.info("Prepared to send article")
+                return
+            else:
+                await asyncio.sleep(wait_seconds)
 
-            await send_article(target_time)
+                await send_article(target_time, key)
 
 
 if __name__ == "__main__":
