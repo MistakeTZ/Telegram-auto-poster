@@ -50,6 +50,7 @@ async def post_to_channel(
 
         if len(text) <= 1024:
             form.add_field("caption", text)
+            text = None
 
         form.add_field("parse_mode", "HTML")
         form.add_field(
