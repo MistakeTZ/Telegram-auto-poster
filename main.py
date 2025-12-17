@@ -8,6 +8,7 @@ from sys import argv, stdout
 
 from dotenv import load_dotenv
 
+from agents.dalle import DalleClient
 from agents.gpt import GPTClient
 from agents.prompt import get_prompt
 from database.article import add_article, get_existing_articles
@@ -42,6 +43,12 @@ async def gpt_image(
 ):
     async with GPTClient(api_key=getenv("api_key"), model=model) as client:
         return await client.send_request(prompt, [(image, url)], max_tokens=800)
+
+
+async def gen_image(prompt, model="dall-e-3"):
+    async with DalleClient(api_key=getenv("api_key")) as client:
+        urls = await client.generate_image(prompt, model=model)
+        return urls[0]
 
 
 def choose_theme(boost_name: str, boost_amount: int = 150):
@@ -200,9 +207,10 @@ async def send_article(post_time: datetime, day_time="any"):
         return
 
     article.text = await genarete_post(article.name)
-    await add_article_links(article)
 
-    image = await get_image(article.name, article.text, article.links)
+    prompt = get_prompt("gen_image", text=article.text)
+    image = await gen_image(prompt)
+
     if image:
         article.photo = image
     session.commit()
@@ -298,7 +306,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, stream=stdout)
+    logging.basicConfig(level=logging.DEBUG, stream=stdout)
     load_dotenv()
     session = init_db()
 
