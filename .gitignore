@@ -12,3 +12,4 @@ wheels/
 *.sqlite3
 .vscode/
 game.env
+articles.json
