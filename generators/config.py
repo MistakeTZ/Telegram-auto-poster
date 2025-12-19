@@ -7,13 +7,8 @@ from database.orm import Session, init_db
 
 load_dotenv()
 
-session: Session = None
+session: Session = init_db()
 
 
 def setup_logging():
     logging.basicConfig(level=logging.DEBUG, stream=stdout)
-
-
-def init_session():
-    global session
-    session = init_db()
