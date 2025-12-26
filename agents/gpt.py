@@ -7,7 +7,7 @@ import aiohttp
 
 class GPTClient:
     """
-    An asynchronous class to send requests to OpenAI's GPT models (e.g., gpt-4o, gpt-4o-mini)
+    An asynchronous class to send requests to OpenAI's GPT models
     supporting multimodal input: text + images.
 
     Uses aiohttp for fully async HTTP requests.
@@ -57,7 +57,7 @@ class GPTClient:
             ".jpeg": "image/jpeg",
             ".gif": "image/gif",
             ".webp": "image/webp",
-        }.get(url[url.rfind(".") :], "image/jpeg")
+        }.get(url[url.rfind("."):], "image/jpeg")
         return f"data:{mime_type};base64,{encoded}"
 
     async def send_request(
@@ -72,7 +72,7 @@ class GPTClient:
         Send a multimodal request to the GPT vision model.
 
         :param prompt: The user text prompt.
-        :param images: List of image URLs or local file paths. If local paths, they will be base64-encoded.
+        :param images: List of image URLs or local file paths.
         :param system_prompt: Optional system message.
         :param max_tokens: Maximum tokens in response.
         :param temperature: Sampling temperature.
@@ -85,7 +85,9 @@ class GPTClient:
         if images:
             for img in images:
                 image_url = self._encode_image_to_base64(*img)
-                content.append({"type": "image_url", "image_url": {"url": image_url}})
+                content.append(
+                    {"type": "image_url", "image_url": {"url": image_url}},
+                )
 
         # Build messages
         messages = [
@@ -98,7 +100,7 @@ class GPTClient:
             "messages": messages,
             "max_tokens": max_tokens,
         }
-        if not "search" in self.model:
+        if "search" not in self.model:
             payload["temperature"] = temperature
 
         headers = {

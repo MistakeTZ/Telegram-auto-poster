@@ -13,7 +13,10 @@ def write_to_articles():
             "name": article.name,
             "photo": article.photo,
             "photo_id": article.posted_photo,
-            "link": f"https://t.me/{article.posted_channel[1:]}/{article.posted_id}",
+            "link": (
+                f"https://t.me/{article.posted_channel[1:]}/"
+                f"{article.posted_id}"
+            ),
             "text": get_text(article.text),
             "hashtags": get_hashtags(article.text),
         }

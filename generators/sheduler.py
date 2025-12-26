@@ -55,12 +55,15 @@ async def main():
                 target_time += timedelta(days=1)
                 target_time = target_time.replace(hour=send_times[0])
 
-            wait_seconds = (target_time - timedelta(minutes=5) - now).total_seconds()
+            wait_seconds = (
+                target_time - timedelta(minutes=5) - now,
+            ).total_seconds()
             if wait_seconds < 0:
                 wait_seconds = 0
 
             logging.info(
-                f"Next send scheduled for {target_time} (in {wait_seconds:.0f} seconds)"
+                f"Next send scheduled for {target_time} "
+                f"(in {wait_seconds:.0f} seconds)"
             )
 
             if "debug" in argv:

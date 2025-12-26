@@ -6,7 +6,11 @@ import aiohttp
 class DalleClient:
     API_URL = "https://api.openai.com/v1/images/generations"
 
-    def __init__(self, api_key: str, session: Optional[aiohttp.ClientSession] = None):
+    def __init__(
+        self,
+        api_key: str,
+        session: Optional[aiohttp.ClientSession] = None,
+    ):
         self.api_key = api_key
         self._owned_session = session is None
         self.session = session or aiohttp.ClientSession()

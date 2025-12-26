@@ -39,7 +39,10 @@ async def send_article(post_time: datetime, day_time="any"):
         except Exception as e:
             logging.warning(e)
 
-    logging.info("Article ready in %s", (datetime.now() - start_time).total_seconds())
+    logging.info(
+        "Article ready in %s",
+        (datetime.now() - start_time).total_seconds(),
+    )
     if datetime.now() < post_time:
         await asyncio.sleep((post_time - datetime.now()).total_seconds())
 

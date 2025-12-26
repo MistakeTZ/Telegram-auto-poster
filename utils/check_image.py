@@ -23,7 +23,10 @@ def resize_image(image: bytes, max_width: int = 120):
 
         ratio = max_width / img.width
         new_height = int(img.height * ratio)
-        resized_img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+        resized_img = img.resize(
+            (max_width, new_height),
+            Image.Resampling.LANCZOS,
+        )
 
         output = BytesIO()
         resized_img.save(output, format="JPEG", quality=95)

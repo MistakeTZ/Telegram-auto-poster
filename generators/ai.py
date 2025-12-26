@@ -23,7 +23,11 @@ async def gpt_image(
     model="gpt-4o-mini",
 ):
     async with GPTClient(api_key=getenv("api_key"), model=model) as client:
-        return await client.send_request(prompt, [(image, url)], max_tokens=800)
+        return await client.send_request(
+            prompt,
+            [(image, url)],
+            max_tokens=800,
+        )
 
 
 async def gen_image(prompt, model="dall-e-3"):

@@ -26,9 +26,10 @@ def extract_image_candidates(soup: BeautifulSoup) -> dict:
     Extract image candidates from an HTML document.
     Returns a dictionary of image candidates with metadata and score.
     """
-    for tag in soup.select(
-        "nav, aside, footer, header, .sidebar, .related, .recommend, .promo, .ads, .comments"
-    ):
+    for tag in soup.select((
+        "nav, aside, footer, header, .sidebar, "
+        ".related, .recommend, .promo, .ads, .comments"
+    )):
         tag.decompose()
 
     images = []
@@ -48,7 +49,14 @@ def extract_image_candidates(soup: BeautifulSoup) -> dict:
             continue
 
         parent_tags = [p.name for p in img.parents if hasattr(p, "name")]
-        in_article = any(t in parent_tags for t in ("article", "main", "figure"))
+        in_article = any(
+            t in parent_tags
+            for t in (
+                "article",
+                "main",
+                "figure",
+            )
+        )
 
         caption = ""
         if img.parent.name == "figure":
@@ -130,11 +138,3 @@ async def get_images_by_url(url: str):
             logging.debug("Failed to get size for %s: %s", src, e)
     normal_images.sort(key=lambda x: x["score"], reverse=True)
     return normal_images
-
-
-if __name__ == "__main__":
-    import asyncio
-    import sys
-
-    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
-    asyncio.run(get_images_by_url("https://1000.menu/cooking/14290-kurica-vino"))

@@ -36,7 +36,7 @@ async def post_to_channel(
     image: Optional[bytes] = None,
 ):
     """
-    Posts a message (with optional image as photo + caption) to a Telegram channel using the Bot API.
+    Posts a message to a Telegram channel using the Bot API.
     """
     base_url = f"https://api.telegram.org/bot{token}"
     photo = None
